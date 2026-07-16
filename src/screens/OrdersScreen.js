@@ -23,6 +23,9 @@ const STATUS_STYLE = {
   cancelled: { label: '✖ Cancelled', bg: '#FEE2E2', fg: colors.danger },
 };
 
+const AGING_THRESHOLD_MS = 10 * 60 * 1000;
+const AGING_STATUSES = ['pending', 'confirmed'];
+
 function timeAgo(dateStr) {
   const diffSeconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
   if (diffSeconds < 60) return `${diffSeconds}s ago`;
@@ -33,13 +36,17 @@ function timeAgo(dateStr) {
 function OrderCard({ order, onUpdateStatus, updatingId }) {
   const statusStyle = STATUS_STYLE[order.status] || { label: order.status, bg: colors.border, fg: colors.text };
   const isUpdating = updatingId === order._id;
+  const waitingMs = Date.now() - new Date(order.createdAt).getTime();
+  const isAging = AGING_STATUSES.includes(order.status) && waitingMs > AGING_THRESHOLD_MS;
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, isAging && styles.cardAging]}>
       <View style={styles.cardHeader}>
         <View>
           <Text style={styles.orderId}>#{order._id.slice(-6).toUpperCase()}</Text>
-          <Text style={styles.orderTime}>{timeAgo(order.createdAt)}</Text>
+          <Text style={[styles.orderTime, isAging && styles.orderTimeAging]}>
+            {isAging ? `⚠️ Waiting ${Math.floor(waitingMs / 60000)}m` : timeAgo(order.createdAt)}
+          </Text>
         </View>
         <View style={[styles.statusPill, { backgroundColor: statusStyle.bg }]}>
           <Text style={[styles.statusPillText, { color: statusStyle.fg }]}>{statusStyle.label}</Text>
@@ -67,13 +74,22 @@ function OrderCard({ order, onUpdateStatus, updatingId }) {
       <View style={styles.cardFooter}>
         <Text style={styles.total}>₹{order.totalPrice ?? '—'}</Text>
         {order.status === 'pending' && (
-          <TouchableOpacity
-            style={styles.actionBtn}
-            disabled={isUpdating}
-            onPress={() => onUpdateStatus(order._id, 'preparing')}
-          >
-            <Text style={styles.actionBtnText}>{isUpdating ? 'Updating…' : '✅ Accept Order'}</Text>
-          </TouchableOpacity>
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={styles.rejectBtn}
+              disabled={isUpdating}
+              onPress={() => onUpdateStatus(order._id, 'cancelled')}
+            >
+              <Text style={styles.rejectBtnText}>✖ Reject</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              disabled={isUpdating}
+              onPress={() => onUpdateStatus(order._id, 'preparing')}
+            >
+              <Text style={styles.actionBtnText}>{isUpdating ? 'Updating…' : '✅ Accept Order'}</Text>
+            </TouchableOpacity>
+          </View>
         )}
         {order.status === 'preparing' && (
           <TouchableOpacity
@@ -198,6 +214,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 14,
   },
+  cardAging: {
+    borderColor: colors.danger,
+    borderWidth: 1.5,
+  },
+  orderTimeAging: {
+    color: colors.danger,
+    fontWeight: '700',
+  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -277,6 +301,23 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: colors.text,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  rejectBtn: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  rejectBtnText: {
+    color: colors.danger,
+    fontSize: 12,
+    fontWeight: '700',
   },
   actionBtn: {
     backgroundColor: colors.primary,

@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { Vibration } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { io } from 'socket.io-client';
 import { API_BASE } from '../config';
@@ -206,6 +207,89 @@ export function AppProvider({ children }) {
     [authToken, authHeaders, logout]
   );
 
+  const updateMenuItem = useCallback(
+    async (itemId, fields) => {
+      if (!authToken) {
+        return { success: false, message: 'Your session is missing. Please log out and log back in.' };
+      }
+      try {
+        const res = await fetchWithTimeout(`${API_BASE}/api/menu/items/${itemId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: JSON.stringify(fields),
+        });
+        if (res.status === 401) {
+          await logout();
+          return { success: false, message: 'Your session has expired. Please log in again.' };
+        }
+        const data = await res.json();
+        if (!res.ok) {
+          return { success: false, message: data.error || 'Could not update the item.' };
+        }
+        setMenuItems((prev) => prev.map((item) => (item._id === data._id ? data : item)));
+        return { success: true };
+      } catch (error) {
+        return { success: false, message: 'Could not reach the backend. Is it running?' };
+      }
+    },
+    [authToken, authHeaders, logout]
+  );
+
+  const deleteMenuItem = useCallback(
+    async (itemId) => {
+      if (!authToken) {
+        return { success: false, message: 'Your session is missing. Please log out and log back in.' };
+      }
+      try {
+        const res = await fetchWithTimeout(`${API_BASE}/api/menu/items/${itemId}`, {
+          method: 'DELETE',
+          headers: authHeaders,
+        });
+        if (res.status === 401) {
+          await logout();
+          return { success: false, message: 'Your session has expired. Please log in again.' };
+        }
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          return { success: false, message: data.error || 'Could not delete the item.' };
+        }
+        setMenuItems((prev) => prev.filter((item) => item._id !== itemId));
+        return { success: true };
+      } catch (error) {
+        return { success: false, message: 'Could not reach the backend. Is it running?' };
+      }
+    },
+    [authToken, authHeaders, logout]
+  );
+
+  const toggleRestaurantOpen = useCallback(
+    async (isOpen) => {
+      if (!authToken) {
+        return { success: false, message: 'Your session is missing. Please log out and log back in.' };
+      }
+      try {
+        const res = await fetchWithTimeout(`${API_BASE}/api/restaurants/me/open`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: JSON.stringify({ isOpen }),
+        });
+        if (res.status === 401) {
+          await logout();
+          return { success: false, message: 'Your session has expired. Please log in again.' };
+        }
+        const data = await res.json();
+        if (!res.ok) {
+          return { success: false, message: data.error || 'Could not update restaurant status.' };
+        }
+        setUser((prev) => (prev ? { ...prev, restaurant: { ...prev.restaurant, isOpen: data.isOpen } } : prev));
+        return { success: true };
+      } catch (error) {
+        return { success: false, message: 'Could not reach the backend. Is it running?' };
+      }
+    },
+    [authToken, authHeaders, logout]
+  );
+
   const fetchOrders = useCallback(async () => {
     if (!authToken) return;
     try {
@@ -289,6 +373,7 @@ export function AppProvider({ children }) {
     socket.on('order:new', (newOrder) => {
       if (!newOrder?._id || !belongsToThisRestaurant(newOrder.restaurant)) return;
       setOrders((prev) => [newOrder, ...prev]);
+      Vibration.vibrate();
     });
 
     socket.on('order:updated', (updatedOrder) => {
@@ -312,7 +397,10 @@ export function AppProvider({ children }) {
       menuItems,
       fetchMenuItems,
       addMenuItem,
+      updateMenuItem,
+      deleteMenuItem,
       setItemDisplayed,
+      toggleRestaurantOpen,
       orders,
       fetchOrders,
       updateOrderStatus,
@@ -327,7 +415,10 @@ export function AppProvider({ children }) {
       menuItems,
       fetchMenuItems,
       addMenuItem,
+      updateMenuItem,
+      deleteMenuItem,
       setItemDisplayed,
+      toggleRestaurantOpen,
       orders,
       fetchOrders,
       updateOrderStatus,

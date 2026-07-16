@@ -19,8 +19,15 @@ function StatTile({ icon, value, label, tint }) {
   );
 }
 
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export default function OverviewScreen() {
-  const { menuItems, orders, fetchMenuItems, fetchOrders } = useApp();
+  const { user, menuItems, orders, fetchMenuItems, fetchOrders } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const handleRefresh = async () => {
@@ -55,6 +62,14 @@ export default function OverviewScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
     >
+      <View style={styles.greetingCard}>
+        <Text style={styles.greetingText}>{greeting()}, {user?.name || 'there'} 👋</Text>
+        <Text style={styles.greetingSubtitle}>
+          {user?.restaurant?.emoji ? `${user.restaurant.emoji} ` : ''}
+          {user?.restaurant?.name || 'Your restaurant'}
+        </Text>
+      </View>
+
       <Text style={styles.sectionTitle}>Menu</Text>
       <View style={styles.statsGrid}>
         <StatTile icon="🍴" value={totalItems} label="Total Items" tint="#FFE4D6" />
@@ -101,6 +116,24 @@ export default function OverviewScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 16, gap: 8, paddingBottom: 32 },
+  greetingCard: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginBottom: 8,
+  },
+  greetingText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  greetingSubtitle: {
+    fontSize: 13,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '700',

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import PrimaryButton from '../components/PrimaryButton';
 import { useApp } from '../context/AppContext';
 import { colors } from '../theme/colors';
@@ -14,14 +14,24 @@ function InfoCard({ label, value }) {
 }
 
 export default function RestaurantInfoScreen() {
-  const { user, logout } = useApp();
+  const { user, logout, toggleRestaurantOpen } = useApp();
   const restaurant = user?.restaurant;
+  const [togglingOpen, setTogglingOpen] = useState(false);
 
   const handleLogout = () => {
     Alert.alert('Log out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Log out', style: 'destructive', onPress: logout },
     ]);
+  };
+
+  const handleToggleOpen = async (isOpen) => {
+    setTogglingOpen(true);
+    const result = await toggleRestaurantOpen(isOpen);
+    setTogglingOpen(false);
+    if (!result.success) {
+      Alert.alert('Could not update status', result.message);
+    }
   };
 
   return (
@@ -34,11 +44,30 @@ export default function RestaurantInfoScreen() {
         </View>
       </View>
 
+      <View style={styles.openCard}>
+        <View style={styles.flex}>
+          <Text style={styles.openTitle}>
+            {restaurant?.isOpen ? "You're open" : "You're closed"}
+          </Text>
+          <Text style={styles.openSubtitle}>
+            {restaurant?.isOpen
+              ? 'Customers can place orders right now.'
+              : 'Customers cannot place new orders while closed.'}
+          </Text>
+        </View>
+        <Switch
+          value={!!restaurant?.isOpen}
+          onValueChange={handleToggleOpen}
+          disabled={togglingOpen}
+          trackColor={{ false: colors.border, true: colors.primary }}
+          thumbColor="#fff"
+        />
+      </View>
+
       <View style={styles.infoGrid}>
         <InfoCard label="📍 Address" value={restaurant?.address || 'Not specified'} />
         <InfoCard label="📞 Phone" value={restaurant?.phone || 'Not specified'} />
         <InfoCard label="⏱️ Delivery Time" value={restaurant?.deliveryTime || 'Not specified'} />
-        <InfoCard label="🔴 Status" value={restaurant?.isOpen ? 'Open 🟢' : 'Closed 🔴'} />
       </View>
 
       <View style={styles.accountCard}>
@@ -83,6 +112,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textMuted,
     marginTop: 4,
+  },
+  openCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+  },
+  openTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  openSubtitle: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
   },
   infoGrid: {
     flexDirection: 'row',

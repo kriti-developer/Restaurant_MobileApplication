@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -17,7 +17,7 @@ import { colors } from '../theme/colors';
 
 const FILTERS = ['All', 'Live', 'Hidden'];
 
-function AddDishModal({ visible, onClose, onSubmit }) {
+function DishFormModal({ visible, onClose, onSubmit, initialValues, title, submitLabel }) {
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [emoji, setEmoji] = useState('');
@@ -32,6 +32,15 @@ function AddDishModal({ visible, onClose, onSubmit }) {
     setCategory('');
     setDescription('');
   };
+
+  useEffect(() => {
+    if (!visible) return;
+    setName(initialValues?.name || '');
+    setPrice(initialValues?.price !== undefined ? String(initialValues.price) : '');
+    setEmoji(initialValues?.emoji || '');
+    setCategory(initialValues?.category || '');
+    setDescription(initialValues?.description || '');
+  }, [visible, initialValues]);
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -55,7 +64,7 @@ function AddDishModal({ visible, onClose, onSubmit }) {
       reset();
       onClose();
     } else {
-      Alert.alert('Could not add dish', result.message);
+      Alert.alert('Could not save dish', result.message);
     }
   };
 
@@ -63,7 +72,7 @@ function AddDishModal({ visible, onClose, onSubmit }) {
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Add a dish</Text>
+          <Text style={styles.modalTitle}>{title}</Text>
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={styles.label}>Name</Text>
             <TextInput style={styles.input} placeholder="e.g. Veg Biryani" value={name} onChangeText={setName} />
@@ -96,7 +105,7 @@ function AddDishModal({ visible, onClose, onSubmit }) {
           <View style={styles.modalActions}>
             <PrimaryButton title="Cancel" variant="outline" onPress={onClose} disabled={submitting} />
             <View style={{ height: 10 }} />
-            <PrimaryButton title="Add Dish" onPress={handleSubmit} loading={submitting} />
+            <PrimaryButton title={submitLabel} onPress={handleSubmit} loading={submitting} />
           </View>
         </View>
       </View>
@@ -104,7 +113,7 @@ function AddDishModal({ visible, onClose, onSubmit }) {
   );
 }
 
-function ItemCard({ item, onToggle, updatingId }) {
+function ItemCard({ item, onToggle, onEdit, onDelete, updatingId }) {
   const isUpdating = updatingId === item._id;
   return (
     <View style={[styles.itemCard, item.isDisplayed && styles.itemCardLive]}>
@@ -147,15 +156,24 @@ function ItemCard({ item, onToggle, updatingId }) {
           {isUpdating ? 'Updating…' : item.isDisplayed ? '⏸ Remove from Live' : '▶ Set Live'}
         </Text>
       </TouchableOpacity>
+      <View style={styles.editDeleteRow}>
+        <TouchableOpacity style={styles.editDeleteBtn} disabled={isUpdating} onPress={() => onEdit(item)}>
+          <Text style={styles.editDeleteBtnText}>✏️ Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.editDeleteBtn} disabled={isUpdating} onPress={() => onDelete(item)}>
+          <Text style={[styles.editDeleteBtnText, styles.deleteBtnText]}>🗑️ Delete</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 export default function MenuScreen() {
-  const { menuItems, fetchMenuItems, addMenuItem, setItemDisplayed } = useApp();
+  const { menuItems, fetchMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, setItemDisplayed } = useApp();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
 
@@ -172,6 +190,37 @@ export default function MenuScreen() {
     if (!result.success) {
       Alert.alert('Could not update item', result.message);
     }
+  };
+
+  const handleOpenAdd = () => {
+    setEditingItem(null);
+    setModalVisible(true);
+  };
+
+  const handleOpenEdit = (item) => {
+    setEditingItem(item);
+    setModalVisible(true);
+  };
+
+  const handleSubmit = (fields) =>
+    editingItem ? updateMenuItem(editingItem._id, fields) : addMenuItem(fields);
+
+  const handleDelete = (item) => {
+    Alert.alert('Delete dish', `Remove "${item.name}" from your menu? This can't be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          setUpdatingId(item._id);
+          const result = await deleteMenuItem(item._id);
+          setUpdatingId(null);
+          if (!result.success) {
+            Alert.alert('Could not delete item', result.message);
+          }
+        },
+      },
+    ]);
   };
 
   const filteredItems = menuItems.filter((item) => {
@@ -194,7 +243,7 @@ export default function MenuScreen() {
           value={search}
           onChangeText={setSearch}
         />
-        <TouchableOpacity style={styles.addBtn} onPress={() => setModalVisible(true)}>
+        <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd}>
           <Text style={styles.addBtnText}>+ Add Dish</Text>
         </TouchableOpacity>
       </View>
@@ -217,7 +266,13 @@ export default function MenuScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         renderItem={({ item }) => (
-          <ItemCard item={item} onToggle={handleToggle} updatingId={updatingId} />
+          <ItemCard
+            item={item}
+            onToggle={handleToggle}
+            onEdit={handleOpenEdit}
+            onDelete={handleDelete}
+            updatingId={updatingId}
+          />
         )}
         ListEmptyComponent={
           <View style={styles.empty}>
@@ -232,10 +287,13 @@ export default function MenuScreen() {
         }
       />
 
-      <AddDishModal
+      <DishFormModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        onSubmit={addMenuItem}
+        onSubmit={handleSubmit}
+        initialValues={editingItem}
+        title={editingItem ? 'Edit dish' : 'Add a dish'}
+        submitLabel={editingItem ? 'Save Changes' : 'Add Dish'}
       />
     </View>
   );
@@ -392,6 +450,24 @@ const styles = StyleSheet.create({
   },
   toggleBtnTextGoLive: { color: '#fff' },
   toggleBtnTextRemove: { color: colors.textMuted },
+  editDeleteRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  editDeleteBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  editDeleteBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  deleteBtnText: {
+    color: colors.danger,
+  },
   empty: {
     alignItems: 'center',
     paddingVertical: 64,
