@@ -372,7 +372,7 @@ export function AppProvider({ children }) {
 
     socket.on('order:new', (newOrder) => {
       if (!newOrder?._id || !belongsToThisRestaurant(newOrder.restaurant)) return;
-      setOrders((prev) => [newOrder, ...prev]);
+      setOrders((prev) => (prev.some((o) => o._id === newOrder._id) ? prev : [newOrder, ...prev]));
       Vibration.vibrate();
     });
 
